@@ -20,6 +20,8 @@ const customTitleInput = document.getElementById("custom-title-input");
 const useCustomBtn = document.getElementById("use-custom-btn");
 const setupBanner = document.getElementById("setup-banner");
 const setupBannerBtn = document.getElementById("setup-banner-btn");
+const savedSection = document.getElementById("saved-section");
+const savedList = document.getElementById("saved-list");
 
 // ===== DOM Elements — Settings View =====
 const settingsToggle = document.getElementById("settings-toggle");
@@ -98,6 +100,7 @@ async function init() {
       recordBtn.disabled = false;
       fetchAndAutoSelect();
       fetchNotesList();
+      fetchSavedRecordings();
     }
 
     // Poll meeting info every 60s (only auto-update if nothing is selected)
@@ -108,6 +111,8 @@ async function init() {
     }, 60000);
     // Poll notes list every 30s
     setInterval(fetchNotesList, 30000);
+    // Poll saved recordings every 30s
+    setInterval(fetchSavedRecordings, 30000);
   } catch {
     setStatus("error", "Backend not reachable");
     recordBtn.disabled = true;
@@ -513,6 +518,7 @@ async function pollProcessingStatus() {
       setStatus("idle", "Ready to record");
       recordBtn.disabled = false;
       changeMeetingBtn.style.display = "inline-block";
+      fetchSavedRecordings();
       return;
     }
 
@@ -528,6 +534,7 @@ async function pollProcessingStatus() {
       recordBtn.disabled = false;
       changeMeetingBtn.style.display = "inline-block";
       fetchNotesList();
+      fetchSavedRecordings();
 
       // Reset for next recording
       selectedMeeting = null;
@@ -586,6 +593,68 @@ async function fetchNotesList() {
     }
   } catch {
     // Silently fail
+  }
+}
+
+// ===== Saved Recordings =====
+
+async function fetchSavedRecordings() {
+  try {
+    const data = await api.savedRecordings();
+    if (data.recordings && data.recordings.length > 0) {
+      savedSection.style.display = "block";
+      savedList.innerHTML = data.recordings
+        .map(
+          (rec) => `
+        <li class="saved-item" data-id="${escapeHtml(rec.id)}">
+          <div class="saved-info">
+            <div class="saved-title">${escapeHtml(rec.title)}</div>
+            <div class="saved-error">${escapeHtml(rec.error)}</div>
+          </div>
+          <button class="saved-retry-btn" data-id="${escapeHtml(rec.id)}">Retry</button>
+        </li>
+      `
+        )
+        .join("");
+
+      savedList.querySelectorAll(".saved-retry-btn").forEach((btn) => {
+        btn.addEventListener("click", () => retrySavedRecording(btn.dataset.id));
+      });
+    } else {
+      savedSection.style.display = "none";
+      savedList.innerHTML = "";
+    }
+  } catch {
+    // Silently fail — don't block the UI
+  }
+}
+
+async function retrySavedRecording(id) {
+  try {
+    // Disable the retry button to prevent double-clicks
+    const btn = savedList.querySelector(`.saved-retry-btn[data-id="${id}"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Retrying...";
+    }
+
+    await api.retrySavedRecording(id);
+
+    isProcessing = true;
+    setStatus("processing", "Processing...");
+    showProcessing("Retrying transcription...");
+    recordBtn.disabled = true;
+
+    // Poll for processing status (same as after stopping a recording)
+    statusPollInterval = setInterval(pollProcessingStatus, 2000);
+  } catch (err) {
+    showError(`Retry failed: ${err.message}`);
+    // Re-enable the button
+    const btn = savedList.querySelector(`.saved-retry-btn[data-id="${id}"]`);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Retry";
+    }
   }
 }
 

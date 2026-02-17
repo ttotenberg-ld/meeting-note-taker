@@ -54,6 +54,8 @@ class AudioRecorder:
         self.system_frames: list[bytes] = []
         self.mic_thread: threading.Thread | None = None
         self.system_thread: threading.Thread | None = None
+        self._stderr_thread: threading.Thread | None = None
+        self._audiotee_stderr_lines: list[str] = []
         self.audiotee_proc: subprocess.Popen | None = None
         self.output_path: str | None = None
         self.start_time: datetime | None = None
@@ -89,13 +91,22 @@ class AudioRecorder:
         cmd = [
             self._audiotee_binary,
             "--sample-rate",
-            str(RATE),  # 44100 → converts to 16-bit signed int LE mono
+            str(RATE),
         ]
+        print(f"[AudioRecorder] Launching AudioTee: {' '.join(cmd)}")
         self.audiotee_proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,  # suppress AudioTee JSON logs
+            stderr=subprocess.PIPE,
         )
+
+        # Drain stderr in background so the pipe doesn't fill and block
+        self._audiotee_stderr_lines = []
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr,
+            daemon=True,
+        )
+        self._stderr_thread.start()
 
         # Read fixed-size chunks that match our PyAudio config.
         # 16-bit mono → 2 bytes per sample → CHUNK * 2 bytes per read.
@@ -104,8 +115,21 @@ class AudioRecorder:
         while self.is_recording:
             data = self.audiotee_proc.stdout.read(bytes_per_read)
             if not data:
+                print(
+                    "[AudioRecorder] AudioTee stdout closed "
+                    f"(collected {len(self.system_frames)} frames so far)"
+                )
                 break
             self.system_frames.append(data)
+
+    def _drain_stderr(self):
+        """Read AudioTee stderr to prevent pipe buffer from filling up."""
+        try:
+            for raw_line in self.audiotee_proc.stderr:
+                line = raw_line.decode("utf-8", errors="replace").rstrip()
+                self._audiotee_stderr_lines.append(line)
+        except (ValueError, OSError):
+            pass
 
     # ---- Public API ----
 
@@ -173,11 +197,24 @@ class AudioRecorder:
                 self.audiotee_proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self.audiotee_proc.kill()
+                self.audiotee_proc.wait()
             self.audiotee_proc = None
+        if self._stderr_thread:
+            self._stderr_thread.join(timeout=2)
 
         self.mic_thread.join(timeout=5)
         if self.system_thread:
             self.system_thread.join(timeout=5)
+
+        # --- Diagnostics ---
+        mic_bytes = len(self.mic_frames)
+        sys_bytes = len(self.system_frames)
+        print(f"[AudioRecorder] Mic frames collected: {mic_bytes}")
+        print(f"[AudioRecorder] System frames collected: {sys_bytes}")
+
+        if self._audiotee_stderr_lines:
+            for line in self._audiotee_stderr_lines[-5:]:
+                print(f"[AudioTee] {line}")
 
         # Convert captured bytes to numpy arrays
         mic_audio = np.frombuffer(b"".join(self.mic_frames), dtype=np.int16).astype(
@@ -189,6 +226,13 @@ class AudioRecorder:
                 b"".join(self.system_frames), dtype=np.int16
             ).astype(np.float32)
 
+            mic_peak = int(np.max(np.abs(mic_audio))) if len(mic_audio) > 0 else 0
+            sys_peak = int(np.max(np.abs(sys_audio))) if len(sys_audio) > 0 else 0
+            print(
+                f"[AudioRecorder] Peak amplitude — mic: {mic_peak}, "
+                f"system: {sys_peak} (of 32767)"
+            )
+
             # Pad the shorter array to match lengths
             max_len = max(len(mic_audio), len(sys_audio))
             mic_audio = np.pad(mic_audio, (0, max_len - len(mic_audio)))
@@ -196,7 +240,11 @@ class AudioRecorder:
 
             mixed = ((mic_audio + sys_audio) / 2).clip(-32768, 32767).astype(np.int16)
         else:
+            print("[AudioRecorder] No system audio frames — using mic only")
             mixed = mic_audio.clip(-32768, 32767).astype(np.int16)
+
+        duration_s = len(mixed) / RATE
+        print(f"[AudioRecorder] Final WAV: {duration_s:.1f}s, {len(mixed)} samples")
 
         with wave.open(self.output_path, "wb") as wf:
             wf.setnchannels(CHANNELS)

@@ -38,6 +38,10 @@ const api = {
   recordingStatus: () => apiGet("/api/recording/status"),
   listNotes: () => apiGet("/api/notes/list"),
 
+  // Saved recordings (failed processing)
+  savedRecordings: () => apiGet("/api/recording/saved"),
+  retrySavedRecording: (id) => apiPost(`/api/recording/retry/${id}`),
+
   // Settings
   getSettings: () => apiGet("/api/settings"),
   updateSettings: (data) => apiPost("/api/settings", data),
