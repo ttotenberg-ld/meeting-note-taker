@@ -7,4 +7,5 @@ google-auth-httplib2==0.2.0
 google-api-python-client==2.155.0
 pyaudio==0.2.14
 pydantic==2.10.0
+python-multipart==0.0.12
 numpy==2.1.0

@@ -13,63 +13,141 @@
       <span class="status-dot idle" id="status-dot"></span>
       <span class="status-text" id="status-text">Connecting...</span>
       <span class="elapsed-time" id="elapsed-time" style="display: none">00:00:00</span>
+      <button class="settings-toggle" id="settings-toggle" title="Settings">&#9881;</button>
     </div>
 
-    <!-- Meeting Picker -->
-    <div class="meeting-card">
-      <div class="meeting-card-header">
-        <h3>Meeting</h3>
-        <button class="change-btn" id="change-meeting-btn" style="display: none">Change</button>
+    <!-- ===== MAIN VIEW ===== -->
+    <div id="main-view">
+      <!-- Setup Banner (shown when config is incomplete) -->
+      <div class="setup-banner" id="setup-banner" style="display: none">
+        <div class="setup-banner-text">Setup required before recording</div>
+        <button class="setup-banner-btn" id="setup-banner-btn">Open Settings</button>
       </div>
 
-      <!-- Selected meeting display -->
-      <div id="selected-meeting-display">
-        <div class="meeting-title" id="meeting-title">Checking calendar...</div>
-        <div class="meeting-attendees" id="meeting-attendees"></div>
-        <div class="meeting-time" id="meeting-time"></div>
-      </div>
-
-      <!-- Meeting picker (hidden by default) -->
-      <div id="meeting-picker" style="display: none">
-        <div class="picker-section">
-          <div class="picker-label">Upcoming meetings</div>
-          <ul class="meeting-options" id="meeting-options"></ul>
+      <!-- Meeting Picker -->
+      <div class="meeting-card">
+        <div class="meeting-card-header">
+          <h3>Meeting</h3>
+          <button class="change-btn" id="change-meeting-btn" style="display: none">Change</button>
         </div>
-        <div class="picker-divider">or</div>
-        <div class="picker-section">
-          <div class="picker-label">Record without a meeting</div>
-          <div class="custom-title-row">
-            <input type="text" id="custom-title-input" class="custom-title-input" placeholder="Enter a title..." />
-            <button class="use-custom-btn" id="use-custom-btn">Use</button>
+
+        <!-- Selected meeting display -->
+        <div id="selected-meeting-display">
+          <div class="meeting-title" id="meeting-title">Checking calendar...</div>
+          <div class="meeting-attendees" id="meeting-attendees"></div>
+          <div class="meeting-time" id="meeting-time"></div>
+        </div>
+
+        <!-- Meeting picker (hidden by default) -->
+        <div id="meeting-picker" style="display: none">
+          <div class="picker-section">
+            <div class="picker-label">Upcoming meetings</div>
+            <ul class="meeting-options" id="meeting-options"></ul>
+          </div>
+          <div class="picker-divider">or</div>
+          <div class="picker-section">
+            <div class="picker-label">Record without a meeting</div>
+            <div class="custom-title-row">
+              <input type="text" id="custom-title-input" class="custom-title-input" placeholder="Enter a title..." />
+              <button class="use-custom-btn" id="use-custom-btn">Use</button>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Record Button -->
+      <div class="controls">
+        <button class="record-btn start" id="record-btn" disabled>
+          <span class="record-icon"></span>
+          <span id="record-btn-text">Start Recording</span>
+        </button>
+      </div>
+
+      <!-- Processing Banner -->
+      <div class="processing-banner" id="processing-banner">
+        <div class="processing-step" id="processing-step">Processing...</div>
+      </div>
+
+      <!-- Error Banner -->
+      <div class="error-banner" id="error-banner">
+        <div class="error-text" id="error-text"></div>
+      </div>
+
+      <!-- Recent Notes -->
+      <div class="recent-section">
+        <h3>Recent Notes</h3>
+        <ul class="notes-list" id="notes-list">
+          <li class="empty-state">No recordings yet</li>
+        </ul>
+      </div>
     </div>
 
-    <!-- Record Button -->
-    <div class="controls">
-      <button class="record-btn start" id="record-btn" disabled>
-        <span class="record-icon"></span>
-        <span id="record-btn-text">Start Recording</span>
-      </button>
-    </div>
+    <!-- ===== SETTINGS VIEW ===== -->
+    <div id="settings-view" style="display: none">
+      <div class="settings-header">
+        <h2>Settings</h2>
+      </div>
 
-    <!-- Processing Banner -->
-    <div class="processing-banner" id="processing-banner">
-      <div class="processing-step" id="processing-step">Processing...</div>
-    </div>
+      <div class="settings-scroll">
+        <!-- Gemini API Key -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <h3>Gemini API Key</h3>
+            <span class="settings-badge" id="gemini-badge">Not configured</span>
+          </div>
+          <p class="settings-help">Get a key from <a href="#" id="gemini-link">Google AI Studio</a></p>
+          <div class="settings-input-row">
+            <input type="password" id="settings-gemini-key" class="settings-input" placeholder="Paste your API key..." />
+            <button class="settings-save-btn" id="save-gemini-btn">Save</button>
+          </div>
+        </div>
 
-    <!-- Error Banner -->
-    <div class="error-banner" id="error-banner">
-      <div class="error-text" id="error-text"></div>
-    </div>
+        <!-- Google Credentials -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <h3>Google Credentials</h3>
+            <span class="settings-badge" id="google-badge">Not configured</span>
+          </div>
+          <p class="settings-help">Upload the OAuth client JSON from your Google Cloud project. See the <a href="#" id="google-help-link">setup guide</a> in the README.</p>
+          <div class="settings-input-row">
+            <label class="settings-file-label" id="credentials-file-label">
+              <input type="file" id="credentials-file-input" accept=".json" style="display: none" />
+              Choose credentials.json
+            </label>
+            <span class="settings-file-name" id="credentials-file-name"></span>
+          </div>
+        </div>
 
-    <!-- Recent Notes -->
-    <div class="recent-section">
-      <h3>Recent Notes</h3>
-      <ul class="notes-list" id="notes-list">
-        <li class="empty-state">No recordings yet</li>
-      </ul>
+        <!-- Obsidian / Notes Paths -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <h3>Obsidian</h3>
+            <span class="settings-badge" id="paths-badge">Not configured</span>
+          </div>
+          <p class="settings-help">Paths to folders inside your Obsidian vault for saving notes.</p>
+
+          <label class="settings-label">Vault name</label>
+          <input type="text" id="settings-vault-name" class="settings-input full" placeholder="e.g. my_notes" />
+
+          <label class="settings-label">Transcript folder (absolute path)</label>
+          <input type="text" id="settings-transcript-dir" class="settings-input full" placeholder="/Users/you/Documents/Obsidian/vault/MeetingNotes/transcripts" />
+
+          <label class="settings-label">Notes folder (absolute path)</label>
+          <input type="text" id="settings-notes-dir" class="settings-input full" placeholder="/Users/you/Documents/Obsidian/vault/MeetingNotes/notes" />
+
+          <label class="settings-label">Notes subpath (from vault root)</label>
+          <input type="text" id="settings-notes-subpath" class="settings-input full" placeholder="e.g. MeetingNotes/notes" />
+
+          <label class="settings-label">Google Drive folder name</label>
+          <input type="text" id="settings-drive-folder" class="settings-input full" placeholder="notes" />
+
+          <button class="settings-save-btn wide" id="save-paths-btn">Save Paths</button>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="settings-done-btn" id="settings-done-btn">Done</button>
+      </div>
     </div>
   </div>
 

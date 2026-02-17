@@ -5,12 +5,52 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac",
+    "build:dir": "electron-builder --mac --dir"
   },
   "dependencies": {
     "electron": "^33.0.0"
   },
   "devDependencies": {
     "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.meetingnotetaker.app",
+    "productName": "Meeting Note-Taker",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Meeting Note-Taker",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/meeting-note-taker-backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "../dist"
+    }
   }
 }

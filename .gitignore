@@ -15,6 +15,16 @@ frontend/package-lock.json
 # Build artifacts
 dist/
 build/
+*.spec.bak
+backend/dist/
+backend/build/
+*.dmg
+
+# Vendor (cloned at build time)
+vendor/
+
+# AudioTee binary (built locally via setup-audio.sh or build.sh)
+backend/bin/
 
 # IDE
 .vscode/

@@ -2,10 +2,17 @@ import os
 
 from google import genai
 
+# Match the timeout used in transcription — a long transcript
+# from a 1-hour meeting can take a while to summarize.
+GEMINI_TIMEOUT = 600_000  # 10 minutes in milliseconds (SDK uses ms)
+
 
 class NoteFormatter:
     def __init__(self, api_key: str):
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            http_options={"timeout": GEMINI_TIMEOUT},
+        )
         self.model = "gemini-2.5-flash"
 
     def format_notes(

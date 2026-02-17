@@ -103,10 +103,17 @@ def process_recording(wav_path: str, meeting_info: dict, timestamp: str):
     title = meeting_info.get("title", "untitled")
 
     try:
+        if not api_key:
+            raise ValueError("Gemini API key not configured. Go to Settings to add it.")
+        if not transcript_dir or not notes_dir:
+            raise ValueError("Transcript/Notes directories not configured. Go to Settings.")
+
         # 1. Transcribe
-        processing_status["step"] = "Transcribing audio..."
+        def update_step(msg: str):
+            processing_status["step"] = msg
+
         transcriber = TranscriptionService(api_key)
-        transcript_text = transcriber.transcribe(wav_path)
+        transcript_text = transcriber.transcribe(wav_path, on_status=update_step)
 
         # 2. Save transcript
         processing_status["step"] = "Saving transcript..."

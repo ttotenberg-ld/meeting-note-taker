@@ -17,6 +17,17 @@ async function apiPost(path, body = null) {
   return res.json();
 }
 
+async function apiUpload(path, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 const api = {
   health: () => apiGet("/api/health"),
   config: () => apiGet("/api/config"),
@@ -26,4 +37,10 @@ const api = {
   stopRecording: () => apiPost("/api/recording/stop"),
   recordingStatus: () => apiGet("/api/recording/status"),
   listNotes: () => apiGet("/api/notes/list"),
+
+  // Settings
+  getSettings: () => apiGet("/api/settings"),
+  updateSettings: (data) => apiPost("/api/settings", data),
+  uploadCredentials: (file) => apiUpload("/api/settings/credentials", file),
+  setupStatus: () => apiGet("/api/settings/setup-status"),
 };

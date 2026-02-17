@@ -1,4 +1,4 @@
-// DOM elements
+// ===== DOM Elements — Main View =====
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
 const elapsedTime = document.getElementById("elapsed-time");
@@ -18,39 +18,91 @@ const meetingPicker = document.getElementById("meeting-picker");
 const meetingOptions = document.getElementById("meeting-options");
 const customTitleInput = document.getElementById("custom-title-input");
 const useCustomBtn = document.getElementById("use-custom-btn");
+const setupBanner = document.getElementById("setup-banner");
+const setupBannerBtn = document.getElementById("setup-banner-btn");
 
-// State
+// ===== DOM Elements — Settings View =====
+const settingsToggle = document.getElementById("settings-toggle");
+const mainView = document.getElementById("main-view");
+const settingsView = document.getElementById("settings-view");
+const settingsDoneBtn = document.getElementById("settings-done-btn");
+
+const settingsGeminiKey = document.getElementById("settings-gemini-key");
+const saveGeminiBtn = document.getElementById("save-gemini-btn");
+const geminiBadge = document.getElementById("gemini-badge");
+
+const credentialsFileInput = document.getElementById("credentials-file-input");
+const credentialsFileLabel = document.getElementById("credentials-file-label");
+const credentialsFileName = document.getElementById("credentials-file-name");
+const googleBadge = document.getElementById("google-badge");
+
+const settingsVaultName = document.getElementById("settings-vault-name");
+const settingsTranscriptDir = document.getElementById("settings-transcript-dir");
+const settingsNotesDir = document.getElementById("settings-notes-dir");
+const settingsNotesSubpath = document.getElementById("settings-notes-subpath");
+const settingsDriveFolder = document.getElementById("settings-drive-folder");
+const savePathsBtn = document.getElementById("save-paths-btn");
+const pathsBadge = document.getElementById("paths-badge");
+
+const geminiLink = document.getElementById("gemini-link");
+const googleHelpLink = document.getElementById("google-help-link");
+
+// ===== State =====
 let isRecording = false;
 let isProcessing = false;
 let timerInterval = null;
 let statusPollInterval = null;
 let recordingStartTime = null;
-let selectedMeeting = null; // the meeting (or custom obj) that will be recorded
+let selectedMeeting = null;
 let pickerOpen = false;
+let inSettingsView = false;
 
 // Config (loaded from backend)
 let obsidianVaultName = "";
 let obsidianNotesSubpath = "";
 
-// --- Initialization ---
+// ===== External Links =====
+geminiLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  window.electronAPI.openExternal("https://aistudio.google.com/apikey");
+});
+
+googleHelpLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  window.electronAPI.openExternal(
+    "https://github.com/ttotenberg/meeting-note-taker#google-cloud-setup"
+  );
+});
+
+// ===== Initialization =====
 
 async function init() {
   try {
     await api.health();
+
+    // Check setup status — if not ready, show settings on first launch
+    const setup = await api.setupStatus();
 
     // Load config from backend
     const cfg = await api.config();
     obsidianVaultName = cfg.obsidian_vault_name || "";
     obsidianNotesSubpath = cfg.obsidian_notes_subpath || "";
 
-    setStatus("idle", "Ready to record");
-    recordBtn.disabled = false;
-    fetchAndAutoSelect();
-    fetchNotesList();
+    if (!setup.ready) {
+      // First launch or incomplete config — go straight to settings
+      showSettings();
+      showSetupBanner();
+      setStatus("idle", "Setup required");
+    } else {
+      setStatus("idle", "Ready to record");
+      recordBtn.disabled = false;
+      fetchAndAutoSelect();
+      fetchNotesList();
+    }
 
     // Poll meeting info every 60s (only auto-update if nothing is selected)
     setInterval(() => {
-      if (!selectedMeeting && !pickerOpen && !isRecording) {
+      if (!selectedMeeting && !pickerOpen && !isRecording && !inSettingsView) {
         fetchAndAutoSelect();
       }
     }, 60000);
@@ -63,7 +115,188 @@ async function init() {
   }
 }
 
-// --- Meeting Selection ---
+// ===== View Toggling =====
+
+function showSettings() {
+  inSettingsView = true;
+  mainView.style.display = "none";
+  settingsView.style.display = "flex";
+  loadSettingsValues();
+}
+
+function hideSettings() {
+  inSettingsView = false;
+  settingsView.style.display = "none";
+  mainView.style.display = "block";
+}
+
+settingsToggle.addEventListener("click", () => {
+  if (inSettingsView) {
+    returnToMainView();
+  } else {
+    showSettings();
+  }
+});
+
+settingsDoneBtn.addEventListener("click", returnToMainView);
+setupBannerBtn.addEventListener("click", showSettings);
+
+async function returnToMainView() {
+  // Reload config in case paths changed
+  try {
+    const cfg = await api.config();
+    obsidianVaultName = cfg.obsidian_vault_name || "";
+    obsidianNotesSubpath = cfg.obsidian_notes_subpath || "";
+  } catch {
+    // ignore
+  }
+
+  // Re-check setup status
+  try {
+    const setup = await api.setupStatus();
+    if (setup.ready) {
+      hideSetupBanner();
+      recordBtn.disabled = false;
+      if (!isRecording && !isProcessing) {
+        setStatus("idle", "Ready to record");
+        fetchAndAutoSelect();
+      }
+    } else {
+      showSetupBanner();
+      recordBtn.disabled = true;
+      setStatus("idle", "Setup required");
+    }
+  } catch {
+    // ignore
+  }
+
+  hideSettings();
+  fetchNotesList();
+}
+
+function showSetupBanner() {
+  setupBanner.style.display = "flex";
+}
+
+function hideSetupBanner() {
+  setupBanner.style.display = "none";
+}
+
+// ===== Settings Logic =====
+
+async function loadSettingsValues() {
+  try {
+    const s = await api.getSettings();
+
+    // Gemini — show masked value info, don't fill the password field
+    if (s.GEMINI_API_KEY && !s.GEMINI_API_KEY.startsWith("****")) {
+      settingsGeminiKey.value = s.GEMINI_API_KEY;
+    } else {
+      settingsGeminiKey.value = "";
+      settingsGeminiKey.placeholder = s.GEMINI_API_KEY
+        ? `Configured (${s.GEMINI_API_KEY})`
+        : "Paste your API key...";
+    }
+
+    // Path fields
+    settingsVaultName.value = s.OBSIDIAN_VAULT_NAME || "";
+    settingsTranscriptDir.value = s.TRANSCRIPT_DIR || "";
+    settingsNotesDir.value = s.NOTES_DIR || "";
+    settingsNotesSubpath.value = s.OBSIDIAN_NOTES_SUBPATH || "";
+    settingsDriveFolder.value = s.DRIVE_FOLDER_NAME || "";
+
+    // Badges
+    updateBadge(geminiBadge, !!s.GEMINI_API_KEY && s.GEMINI_API_KEY !== "");
+    updateBadge(googleBadge, s.google_credentials_configured);
+    updateBadge(
+      pathsBadge,
+      !!(s.TRANSCRIPT_DIR && s.NOTES_DIR)
+    );
+
+    // Credentials file name feedback
+    credentialsFileName.textContent = s.google_credentials_configured
+      ? "✓ credentials.json uploaded"
+      : "";
+  } catch {
+    // Can't reach backend — settings will be blank
+  }
+}
+
+function updateBadge(badge, isOk) {
+  if (isOk) {
+    badge.textContent = "Configured";
+    badge.classList.add("ok");
+  } else {
+    badge.textContent = "Not configured";
+    badge.classList.remove("ok");
+  }
+}
+
+// --- Save Gemini Key ---
+saveGeminiBtn.addEventListener("click", async () => {
+  const key = settingsGeminiKey.value.trim();
+  if (!key) return;
+
+  saveGeminiBtn.textContent = "Saving...";
+  try {
+    await api.updateSettings({ GEMINI_API_KEY: key });
+    updateBadge(geminiBadge, true);
+    settingsGeminiKey.value = "";
+    settingsGeminiKey.placeholder = `Configured (****${key.slice(-4)})`;
+    saveGeminiBtn.textContent = "Saved ✓";
+  } catch {
+    saveGeminiBtn.textContent = "Error";
+  }
+  setTimeout(() => {
+    saveGeminiBtn.textContent = "Save";
+  }, 2000);
+});
+
+// --- Upload credentials.json ---
+credentialsFileInput.addEventListener("change", async () => {
+  const file = credentialsFileInput.files[0];
+  if (!file) return;
+
+  credentialsFileName.textContent = "Uploading...";
+  try {
+    const result = await api.uploadCredentials(file);
+    if (result.status === "ok") {
+      credentialsFileName.textContent = "✓ credentials.json uploaded";
+      updateBadge(googleBadge, true);
+    } else {
+      credentialsFileName.textContent = result.message || "Upload failed";
+    }
+  } catch {
+    credentialsFileName.textContent = "Upload failed";
+  }
+  // Reset file input so the same file can be re-uploaded
+  credentialsFileInput.value = "";
+});
+
+// --- Save Obsidian / path settings ---
+savePathsBtn.addEventListener("click", async () => {
+  savePathsBtn.textContent = "Saving...";
+  try {
+    await api.updateSettings({
+      OBSIDIAN_VAULT_NAME: settingsVaultName.value.trim(),
+      TRANSCRIPT_DIR: settingsTranscriptDir.value.trim(),
+      NOTES_DIR: settingsNotesDir.value.trim(),
+      OBSIDIAN_NOTES_SUBPATH: settingsNotesSubpath.value.trim(),
+      DRIVE_FOLDER_NAME: settingsDriveFolder.value.trim(),
+    });
+    const hasRequired =
+      settingsTranscriptDir.value.trim() && settingsNotesDir.value.trim();
+    updateBadge(pathsBadge, hasRequired);
+    savePathsBtn.textContent = "Saved ✓";
+  } catch {
+    savePathsBtn.textContent = "Error";
+  }
+  setTimeout(() => {
+    savePathsBtn.textContent = "Save Paths";
+  }, 2000);
+});
+
+// ===== Meeting Selection =====
 
 async function fetchAndAutoSelect() {
   try {
@@ -122,7 +355,7 @@ function selectCustomTitle(title) {
   closePicker();
 }
 
-// --- Picker UI ---
+// ===== Picker UI =====
 
 changeMeetingBtn.addEventListener("click", () => {
   if (pickerOpen) {
@@ -150,7 +383,8 @@ async function openPicker() {
   customTitleInput.value = "";
 
   // Fetch upcoming meetings
-  meetingOptions.innerHTML = '<li class="meeting-option-item loading">Loading...</li>';
+  meetingOptions.innerHTML =
+    '<li class="meeting-option-item loading">Loading...</li>';
   try {
     const data = await api.upcomingMeetings();
     if (data.meetings && data.meetings.length > 0) {
@@ -176,11 +410,13 @@ async function openPicker() {
         .join("");
 
       // Add click handlers
-      meetingOptions.querySelectorAll(".meeting-option-item").forEach((li, idx) => {
-        li.addEventListener("click", () => {
-          selectMeeting(data.meetings[idx]);
+      meetingOptions
+        .querySelectorAll(".meeting-option-item")
+        .forEach((li, idx) => {
+          li.addEventListener("click", () => {
+            selectMeeting(data.meetings[idx]);
+          });
         });
-      });
     } else {
       meetingOptions.innerHTML =
         '<li class="meeting-option-item loading">No upcoming meetings</li>';
@@ -198,7 +434,7 @@ function closePicker() {
   changeMeetingBtn.textContent = selectedMeeting ? "Change" : "Pick";
 }
 
-// --- Recording ---
+// ===== Recording =====
 
 recordBtn.addEventListener("click", async () => {
   if (isProcessing) return;
@@ -307,7 +543,7 @@ async function pollProcessingStatus() {
   }
 }
 
-// --- Notes List ---
+// ===== Notes List =====
 
 function openInObsidian(filename) {
   if (!obsidianVaultName) return;
@@ -353,7 +589,7 @@ async function fetchNotesList() {
   }
 }
 
-// --- UI Helpers ---
+// ===== UI Helpers =====
 
 function setStatus(state, text) {
   statusDot.className = `status-dot ${state}`;
@@ -407,5 +643,5 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// --- Start ---
+// ===== Start =====
 init();
